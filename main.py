@@ -4,7 +4,7 @@ import sys
 from dataclasses import dataclass
 from typing import List, Any, Dict, Optional, Callable, Iterable
 from faceit_api.faceit_data import FaceitData
-
+from functions import percent
 
 CONFIG_FILE = "faceit.json"
 
@@ -14,7 +14,7 @@ class Stats(object):
     kills: int
     assists: int
     deaths: int
-    headshots: float
+    headshots: int
     mvps: int
     result: int
     triple: int
@@ -22,22 +22,35 @@ class Stats(object):
     penta: int
     kd: float
     kr: float
+    rounds: int
 
     @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> "Stats":
+    def from_dict(cls, data: Dict[str, str], rounds: int) -> "Stats":
         return Stats(
             assists=int(data['Assists']),
             deaths=int(data['Deaths']),
             kills=int(data['Kills']),
-            headshots=float(data['Headshots %']),
+            headshots=int(data['Headshots']),
             triple=int(data['Triple Kills']),
             quadro=int(data['Quadro Kills']),
             penta=int(data['Penta Kills']),
             result=int(data['Result']),
             kd=float(data['K/D Ratio']),
             kr=float(data['K/R Ratio']),
-            mvps=int(data['MVPs'])
+            mvps=int(data['MVPs']),
+            rounds=rounds
         )
+
+
+@dataclass
+class Player(object):
+    player_id: str
+    nickname: str
+    stats: Dict[str, Stats]
+    mean: Optional[Stats]
+
+    def aggregate_stat(self, key: Callable, func: Callable = sum):
+        return func(key(stats) for stats in self.stats.values())
 
 
 @dataclass
@@ -56,14 +69,26 @@ class MeanStats(object):
     kd: float
     kr: float
 
-
-
-@dataclass
-class Player(object):
-    player_id: str
-    nickname: str
-    stats: Dict[str, Stats]
-    mean: Optional[Stats]
+    @classmethod
+    def from_player(cls, player: Player):
+        kills = player.aggregate_stat(key=lambda it: it.kills)
+        deaths = player.aggregate_stat(key=lambda it: it.deaths)
+        rounds = player.aggregate_stat(key=lambda it: it.rounds)
+        return MeanStats(
+            nickname=player.nickname,
+            matches=len(player.stats),
+            kills=kills,
+            assists=player.aggregate_stat(key=lambda it: it.assists),
+            deaths=deaths,
+            headshots=player.aggregate_stat(key=lambda it: it.headshots),
+            mvps=player.aggregate_stat(key=lambda it: it.mvps),
+            result=player.aggregate_stat(key=lambda it: it.result),
+            triple=player.aggregate_stat(key=lambda it: it.triple),
+            quadro=player.aggregate_stat(key=lambda it: it.quadro),
+            penta=player.aggregate_stat(key=lambda it: it.penta),
+            kd=kills / deaths,
+            kr=kills / rounds,
+        )
 
 
 def analyze_champ(faceit: FaceitData, champ_id: str):
@@ -99,40 +124,15 @@ def analyze_match(faceit: FaceitData, match_id: str, players: Dict[str, Player])
 
     for team in game["teams"]:
         players_data = team["players"]
+        round_data = game["round_stats"]
+        total_rounds = int(round_data["Rounds"])
         for player_data in players_data:
             player_id = player_data["player_id"]
             nickname = player_data["nickname"]
             player = players.setdefault(player_id, Player(player_id, nickname, dict(), None))
 
-            stats_data = Stats.from_dict(player_data["player_stats"])
+            stats_data = Stats.from_dict(player_data["player_stats"], total_rounds)
             player.stats[match_id] = stats_data
-
-
-def mean(iterable: Iterable):
-    items = list(iterable)
-    return sum(items) / len(items)
-
-
-def calc_stat_by_key(player: Player, func=Callable, key=Callable):
-    return func.__call__(key(stats) for stats in player.stats.values())
-
-
-def calc_mean(player: Player):
-    return MeanStats(
-        nickname=player.nickname,
-        matches=len(player.stats),
-        kills=calc_stat_by_key(player, sum, key=lambda it: it.kills),
-        assists=calc_stat_by_key(player, sum, key=lambda it: it.assists),
-        deaths=calc_stat_by_key(player, sum, key=lambda it: it.deaths),
-        headshots=calc_stat_by_key(player, mean, key=lambda it: it.headshots),
-        mvps=calc_stat_by_key(player, sum, key=lambda it: it.mvps),
-        result=calc_stat_by_key(player, sum, key=lambda it: it.result),
-        triple=calc_stat_by_key(player, sum, key=lambda it: it.triple),
-        quadro=calc_stat_by_key(player, sum, key=lambda it: it.quadro),
-        penta=calc_stat_by_key(player, sum, key=lambda it: it.penta),
-        kd=calc_stat_by_key(player, mean, key=lambda it: it.kd),
-        kr=calc_stat_by_key(player, mean, key=lambda it: it.kr),
-    )
 
 
 def print_stats(players: Dict[str, Player]):
@@ -164,7 +164,7 @@ def print_mean(players: Dict[str, Player]):
     print(f"%15s\t%3s\t%3s\t%3s\t%3s\t%4s\t%4s\t%5s\t%4s\t%3s\t%3s\t%3s\t%3s" %
           ("nickname", "M", "K", "A", "D", "K/D", "K/R", "HS%", "MVPs", "R", "T", "Q", "P"))
 
-    stats = [calc_mean(player) for player in players.values()]
+    stats = [MeanStats.from_player(player) for player in players.values()]
 
     for mean_stats in sorted(stats, key=lambda it: it.matches, reverse=True):
         print(f"%15s\t%3d\t%3d\t%3d\t%3d\t%4.2f\t%4.2f\t%5.1f\t%4d\t%3d\t%3d\t%3d\t%3d" % (
@@ -175,7 +175,7 @@ def print_mean(players: Dict[str, Player]):
             mean_stats.deaths,
             mean_stats.kd,
             mean_stats.kr,
-            mean_stats.headshots,
+            percent(mean_stats.headshots, mean_stats.kills),
             mean_stats.mvps,
             mean_stats.result,
             mean_stats.triple,
