@@ -1,12 +1,8 @@
-import json
-import os.path
-import sys
 from dataclasses import dataclass
-from typing import List, Any, Dict, Optional, Callable, Iterable
-from faceit_api.faceit_data import FaceitData
-from functions import percent
+from typing import Dict, Optional, Callable
 
-CONFIG_FILE = "faceit.json"
+from faceit_api.faceit_data import FaceitData
+from utils.functions import percent
 
 
 @dataclass
@@ -182,29 +178,3 @@ def print_mean(players: Dict[str, Player]):
             mean_stats.quadro,
             mean_stats.penta)
         )
-
-
-def main(args: List[str]):
-    if not os.path.isfile(CONFIG_FILE):
-        sys.exit(f"Configuration file {CONFIG_FILE} not found")
-
-    with open(CONFIG_FILE, "rt") as file:
-        config_data = json.loads(file.read())
-
-    apikey = config_data["apikey"]
-
-    if len(args) < 2:
-        sys.exit("Specify at least one championship id in program arguments")
-
-    faceit = FaceitData(apikey.strip())
-
-    for champ_id in args[1:]:
-        players = analyze_champ(faceit, champ_id)
-
-        # print_stats(players)
-
-        print_mean(players)
-
-
-if __name__ == '__main__':
-    main(sys.argv)

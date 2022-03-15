@@ -133,3 +133,7 @@ faceit.json
 .idea/
 
 faceit_api
+
+demos/
+
+temp/
