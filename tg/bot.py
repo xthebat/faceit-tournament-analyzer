@@ -91,6 +91,7 @@ class Job(threading.Thread):
         if self.df is not None and view_type != self.view_type:
             fig, plot = draw_faceit_score_history(self.df, view_type=view_type)
             file = savefig(fig)
+            plt.close(fig)
 
             with open(file.name, "rb") as picture:
                 media = InputMediaPhoto(media=picture, caption=self.nickname)
