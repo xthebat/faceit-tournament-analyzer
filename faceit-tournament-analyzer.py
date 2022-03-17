@@ -7,6 +7,10 @@ from typing import List, Optional
 
 from demo.base import Demo, Statistics
 from faceit.faceit import Faceit
+from utils.logging import logger
+
+
+log = logger()
 
 
 def analyze_championship(faceit: Faceit, championship: str, demos_dir: Path, args: argparse.Namespace):
@@ -34,7 +38,7 @@ def main(argv: List[str]):
     parser.add_argument('championships', type=str, nargs='+', help="Identifier of championships to analyze")
     args = parser.parse_args(argv[1:])
 
-    print(args)
+    log.info(args)
 
     if not os.path.isfile(args.config):
         sys.exit(f"Configuration file {args.config} not found")
@@ -55,5 +59,11 @@ def main(argv: List[str]):
         analyze_championship(faceit, championship, demos_dir, args)
 
 
+def demo_test():
+    demo = Demo.analyze("demos/1-bc6f4da7-e96b-4070-9a66-6392718d3ba6-1-1.dem")
+    print(demo.stats.player_box_score().to_string())
+
+
 if __name__ == '__main__':
+    # demo_test()
     main(sys.argv)

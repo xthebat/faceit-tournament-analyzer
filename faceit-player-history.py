@@ -2,22 +2,26 @@ import argparse
 import json
 import os.path
 import sys
-from datetime import datetime
 from typing import List
 
-from dateutil.relativedelta import relativedelta
-from matplotlib import pyplot as plt
-
 from faceit.faceit import Faceit
+from faceit.functions import statistics2dataframe
+from faceit.visualization import draw_faceit_score_history
+from utils.logging import logger
+
+
+log = logger()
 
 
 def main(argv: List[str]):
-    parser = argparse.ArgumentParser(prog="faceit-tournament-analyzer", description='Facet tournament analyzer')
+    parser = argparse.ArgumentParser(prog="faceit-player-history")
     parser.add_argument('-c', '--config', required=True, type=str, help="Path to config. file")
     parser.add_argument('-p', '--player', required=True, type=str, help="Player id")
     args = parser.parse_args(argv[1:])
 
-    print(args)
+    log.info(args)
+
+    nickname = args.player
 
     if not os.path.isfile(args.config):
         sys.exit(f"Configuration file {args.config} not found")
@@ -29,22 +33,13 @@ def main(argv: List[str]):
 
     faceit = Faceit(apikey)
 
-    player = faceit.player(args.player)
+    player = faceit.player(nickname)
+    statistics = faceit.player_games_v2(player.player_id)
 
-    games = list(faceit.player_games(player.player_id))
-    games.sort(key=lambda it: it.date)
-    mm = filter(lambda it: it.mode == "5v5", games)
-    history = [1000]
-    elo = 1000
-    for game in mm:
-        if game.is_player_win(player):
-            elo += 25
-        else:
-            elo -= 25
-        history.append(elo)
+    df = statistics2dataframe(statistics)
+    fig, plot = draw_faceit_score_history(df, x="date")
 
-    plt.plot(history)
-    plt.show()
+    fig.show()
 
 
 if __name__ == '__main__':

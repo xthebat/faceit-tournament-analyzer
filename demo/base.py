@@ -54,7 +54,8 @@ class Demo:
             outpath=str(out_path),
             parse_frames=False,
             trade_time=5,
-            buy_style="hltv"
+            buy_style="hltv",
+            json_indentation=True
         )
 
         if force or not json_path.is_file():

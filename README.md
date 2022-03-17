@@ -15,10 +15,11 @@ Simple script to gather players statistics for whole championship using faceit-a
 }
 ```
 
-3. Get git submodule
+3. Get git submodule and python packages
 
-```shell
+```shell 
 git submodule update --init --recursive
+python3 -m pip install -r requirements.txt
 ```
 4. Run like:
 

@@ -1,3 +1,4 @@
+import json
 import time
 import zlib
 from dataclasses import dataclass
@@ -6,7 +7,13 @@ from pathlib import Path
 from typing import Optional, Iterable, Union, List, Dict
 from urllib.request import Request, urlopen
 
+import requests
+
 from faceit_api.faceit_data import FaceitData
+from utils.functions import dict_get_or_default
+from utils.logging import logger
+
+log = logger()
 
 
 @dataclass
@@ -83,6 +90,29 @@ class Game:
 
 
 @dataclass
+class Statistic:
+    name: str
+    team: str
+    map_name: str
+    rounds: int
+    elo: Optional[int]
+    mode: str
+    date: datetime
+
+    @classmethod
+    def from_data(cls, data: dict) -> "Statistic":
+        return Statistic(
+            name=data["nickname"],
+            team=data["i5"],
+            map_name=data["i1"],
+            rounds=dict_get_or_default(data, "i12", None, convert=int),
+            elo=dict_get_or_default(data, "elo", None, convert=int),
+            mode=data["gameMode"],
+            date=dict_get_or_default(data, "date", None, convert=lambda it: datetime.fromtimestamp(it // 1000))
+        )
+
+
+@dataclass
 class Match:
     team_a: Team
     team_b: Team
@@ -125,9 +155,20 @@ class Match:
         return self.match_id == other.match_id
 
 
+_FACEIT_STATS_URL = "https://api.faceit.com/stats/v1"
+
+
+def _get_player_matches_stats(faceit: FaceitData, player_id: str, game: str, page: int = 0, size: int = 0):
+    api_url = f"{_FACEIT_STATS_URL}/stats/time/users/{player_id}/games/{game}?page={page}&size={size}"
+    headers = {'accept': 'application/json'}
+    res = requests.get(api_url, headers=headers)
+    return json.loads(res.content.decode('utf-8')) if res.status_code == 200 else None
+
+
 class Faceit(object):
 
     def __init__(self, apikey: str):
+        #
         self.apikey = apikey
         self.client = FaceitData(apikey)
 
@@ -140,7 +181,7 @@ class Faceit(object):
         return Match.from_data(data)
 
     def download_demo(self, match: Union[Match, str], directory: Path, force: bool = False):
-        print(f"Download demo for {match}")
+        log.info(f"Download demo for {match} into {directory}")
 
         if isinstance(match, Match):
             demo_url = match.demo_url
@@ -170,15 +211,19 @@ class Faceit(object):
     def download_all_demos(self, matches: Iterable[Match], directory: Path, force: bool = False) -> Dict[Match, Path]:
         return {match: self.download_demo(match, directory, force) for match in matches}
 
-    def player(self, nickname: str) -> Player:
+    def player(self, nickname: str) -> Optional[Player]:
+        log.info(f"Request player {nickname} details")
+
         player_details = self.client.player_details(nickname)
+        if player_details is None:
+            return None
         return Player.from_data(player_details)
 
-    def player_games(self, player_id: str, count: Optional[int] = None) -> Iterable[Game]:
+    def player_games_v1(self, player_id: str, count: Optional[int] = None) -> Iterable[Game]:
         index = 0
         position = 0
         while True:
-            print(f"Requesting player {player_id} matches from {position}")
+            log.info(f"Requesting player {player_id} matches from {position}")
             matches = self.client.player_matches(player_id, "csgo", starting_item_position=position)
             if matches is None or len(matches["items"]) == 0:
                 break
@@ -190,3 +235,22 @@ class Faceit(object):
             time.sleep(0.1)
             position += 20
 
+    def player_games_v2(self, player_id: str, count: Optional[int] = None):
+        log.info(f"Request player {player_id} statistics history")
+
+        index = 0
+        page = 0
+
+        player = Player.from_data(self.client.player_id_details(player_id))
+
+        while True:
+            log.info(f"Requesting player {player_id}/{player.nickname} matches for page {page}")
+            matches = _get_player_matches_stats(self.client, player_id, "csgo", page)
+            if matches is None or len(matches) == 0:
+                break
+            for item in matches:
+                index += 1
+                yield Statistic.from_data(item)
+                if count is not None and index >= count:
+                    return
+            page += 1
