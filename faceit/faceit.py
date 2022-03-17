@@ -223,7 +223,7 @@ class Faceit(object):
         index = 0
         position = 0
         while True:
-            log.info(f"Requesting player {player_id} matches from {position}")
+            log.debug(f"Requesting player {player_id} matches from {position}")
             matches = self.client.player_matches(player_id, "csgo", starting_item_position=position)
             if matches is None or len(matches["items"]) == 0:
                 break
@@ -244,7 +244,7 @@ class Faceit(object):
         player = Player.from_data(self.client.player_id_details(player_id))
 
         while True:
-            log.info(f"Requesting player {player_id}/{player.nickname} matches for page {page}")
+            log.debug(f"Requesting player {player_id}/{player.nickname} matches for page {page}")
             matches = _get_player_matches_stats(self.client, player_id, "csgo", page)
             if matches is None or len(matches) == 0:
                 break

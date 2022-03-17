@@ -46,7 +46,7 @@ console.setFormatter(_colored_formatter)
 
 _logger = logging.getLogger("faceit")
 _logger.addHandler(console)
-_logger.setLevel(logging.DEBUG)
+_logger.setLevel(logging.INFO)
 
 
 def set_root_log_level(level: int):

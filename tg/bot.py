@@ -183,7 +183,7 @@ class FaceitHistoryTelegramBot:
 
     @playgame()
     def on_message(self, update: Update, context: CallbackContext) -> None:
-        log.debug(f"User {update.effective_user.username} send message '{update.message.text}'")
+        log.info(f"User {update.effective_user.username} send message '{update.message.text}'")
         worker = self._get_or_create_worker(update.effective_user.username)
         worker.on_message(update)
 
@@ -191,7 +191,7 @@ class FaceitHistoryTelegramBot:
     def start(self, update: Update, context: CallbackContext) -> None:
         user = update.effective_user
         self._get_or_create_worker(user.username).idle()
-        log.debug(f"User {user.username} execute start command")
+        log.info(f"User {user.username} execute start command")
         message = self.start_message.format(username=user.mention_markdown_v2())
         update.message.reply_markdown_v2(message, reply_markup=ForceReply(selective=True))
 
@@ -205,7 +205,7 @@ class FaceitHistoryTelegramBot:
 
         data = query.data
 
-        log.debug(f"User {update.effective_user.username} clicked on {data}")
+        log.info(f"User {update.effective_user.username} clicked on {data}")
 
         if data.startswith("HISTORY_"):
             view_type = data.removeprefix("HISTORY_")
@@ -215,7 +215,7 @@ class FaceitHistoryTelegramBot:
     @playgame()
     def history_command(self, update: Update, context: CallbackContext) -> None:
         username = update.effective_user.username
-        log.debug(f"User {username} execute history command")
+        log.info(f"User {username} execute history command")
         if not context.args:
             worker = self._get_or_create_worker(username)
             worker.wait_nickname()
