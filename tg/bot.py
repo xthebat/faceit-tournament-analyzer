@@ -76,7 +76,6 @@ class Job(threading.Thread):
         fig, plot = draw_faceit_score_history(self.df, view_type="date")
         file = savefig(fig)
 
-        fig.clf()
         plt.close(fig)
 
         with open(file.name, "rb") as picture:

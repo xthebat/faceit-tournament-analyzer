@@ -5,8 +5,14 @@ import os
 import sys
 from typing import List
 
+import matplotlib
+
 from tg.bot import FaceitHistoryTelegramBot
 from utils.logging import logger, set_log_file
+
+
+matplotlib.use('Agg')
+
 
 log = logger()
 
