@@ -47,7 +47,7 @@ class FaceitApi(object):
             try:
                 return self.__request_internal(request, endpoint, url)
             except (UnicodeDecodeError, TimeoutError) as error:
-                log.error(f"{error}")
+                log.error(f"{self._base_url}/{endpoint}/{url} -> {error}")
                 if retry == self._retries - 1:
                     raise FaceitApiRequestError(error)
                 time.sleep(5.0)

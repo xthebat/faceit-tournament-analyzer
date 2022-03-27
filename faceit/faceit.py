@@ -134,7 +134,7 @@ class Match:
             match_id=data["id"],
             teams=[team1, team2],
             demo_url=data["demoURLs"][0] if is_played else None,
-            map=data["voting"]["map"]["pick"][0] if is_played else None,
+            map=data["voting"]["map"]["pick"][0] if "voting" in data else None,
             winner=winner,
             calculate_elo=data["calculateElo"],
             date=date,
