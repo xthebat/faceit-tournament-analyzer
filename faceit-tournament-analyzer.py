@@ -46,7 +46,6 @@ def main(argv: List[str]):
     with open(args.config, "rt") as file:
         config_data = json.loads(file.read())
 
-    apikey = config_data["apikey"]
     demos_dir = Path(config_data["demos_dir"])
 
     demos_dir.mkdir(exist_ok=True)
@@ -54,7 +53,7 @@ def main(argv: List[str]):
     if len(args.championships) == 0:
         sys.exit("Specify at least one championship id in program arguments")
 
-    faceit = Faceit(apikey)
+    faceit = Faceit()
     for championship in args.championships:
         analyze_championship(faceit, championship, demos_dir, args)
 

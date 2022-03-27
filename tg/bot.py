@@ -149,8 +149,8 @@ class UserContext:
 
 class FaceitHistoryTelegramBot:
 
-    def __init__(self, faceit_api_key: str, telegram_token: str, start_message: str):
-        self.faceit = Faceit(faceit_api_key)
+    def __init__(self, telegram_token: str, start_message: str):
+        self.faceit = Faceit()
 
         self.start_message = start_message
 

@@ -34,11 +34,10 @@ def main(argv: List[str]):
     if args.logfile is not None:
         set_log_file(args.logfile, logging.DEBUG)
 
-    apikey = config_data["apikey"]
     telegram_token = config_data["telegram_token"]
     start_message = config_data["start_message"]
 
-    telegram_bot = FaceitHistoryTelegramBot(apikey, telegram_token, start_message)
+    telegram_bot = FaceitHistoryTelegramBot(telegram_token, start_message)
 
     telegram_bot.run()
 

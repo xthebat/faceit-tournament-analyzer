@@ -32,9 +32,7 @@ def main(argv: List[str]):
     with open(args.config, "rt") as file:
         config_data = json.loads(file.read())
 
-    apikey = config_data["apikey"]
-
-    faceit = Faceit(apikey)
+    faceit = Faceit()
 
     player = faceit.player(nickname)
     statistics = faceit.matches_stats(player.player_id)

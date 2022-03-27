@@ -119,7 +119,7 @@ class Match:
 
 class Faceit(object):
 
-    def __init__(self, apikey: str):
+    def __init__(self):
         self._api = FaceitApi()
 
     def championship_matches(self, championship_id) -> Iterable[Match]:
