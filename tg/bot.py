@@ -70,7 +70,7 @@ class Job(threading.Thread):
             self.update.message.reply_text(f"Не нашел игрока с никнеймом {self.nickname} :(")
             return
 
-        statistics = self.parent.faceit.player_games_v2(player.player_id, self.count)
+        statistics = self.parent.faceit.matches_stats(player.player_id, self.count)
         self.df = statistics2dataframe(statistics)
 
         fig, plot = draw_faceit_score_history(self.df, view_type="date")

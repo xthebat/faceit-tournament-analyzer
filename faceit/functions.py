@@ -1,20 +1,8 @@
-from typing import Iterable, Tuple
+from typing import Iterable
 
 import pandas as pd
 
-from faceit.faceit import Game, Player, Statistic
-
-
-def faceit_win_history(
-        player: Player,
-        games: Iterable[Game],
-        mode: str = "5v5",
-) -> Iterable[Tuple[Game, int]]:
-    games = sorted(games, key=lambda it: it.date)
-    games = filter(lambda it: it.mode == mode, games)
-
-    for game in games:
-        yield game, 1 if game.is_player_win(player) else -1
+from faceit.faceit import Statistic
 
 
 def statistics2dataframe(statistics: Iterable[Statistic]) -> pd.DataFrame:

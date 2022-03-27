@@ -48,10 +48,10 @@ class Demo:
         json_path = Path(out_path, demo_path.stem).with_suffix(".json")
 
         demo_parser = DemoParser(
-            demofile=str(demo_path),
+            demofile=str(demo_path.absolute()).replace("\\", "/"),
             log=True,
             # TODO: there is bug in DemoParser.parse_demo() in self.output_file ... lead to ERROR logging
-            outpath=str(out_path),
+            outpath=str(out_path.absolute()).replace("\\", "/"),
             parse_frames=False,
             trade_time=5,
             buy_style="hltv",

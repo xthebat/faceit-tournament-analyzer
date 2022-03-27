@@ -1,4 +1,3 @@
-import json
 import time
 import zlib
 from dataclasses import dataclass
@@ -7,9 +6,7 @@ from pathlib import Path
 from typing import Optional, Iterable, Union, List, Dict
 from urllib.request import Request, urlopen
 
-import requests
-
-from faceit_api.faceit_data import FaceitData
+from faceit.api import FaceitApi, FaceitApiRequestError
 from utils.functions import dict_get_or_default
 from utils.logging import logger
 
@@ -21,11 +18,17 @@ class Player:
     player_id: str
     nickname: str
     level: Optional[int]
+    elo: Optional[int]
 
     @classmethod
-    def from_data(cls, data: dict) -> "Player":
-        skill = int(data["skill_level"]) if "skill_level" in data else None
-        return Player(data["player_id"], data["nickname"], skill)
+    def from_details(cls, data: dict) -> "Player":
+        level = data["games"]["csgo"]["skill_level"]
+        elo = data["games"]["csgo"]["faceit_elo"]
+        return Player(data["id"], data["nickname"], level, elo)
+
+    @classmethod
+    def from_roster(cls, data: dict) -> "Player":
+        return Player(data["id"], data["nickname"], data["gameSkillLevel"], data["elo"])
 
     def __hash__(self):
         return hash(self.player_id)
@@ -39,54 +42,16 @@ class Player:
 @dataclass
 class Team:
     name: str
-    players: Optional[List[Player]]
+    players: Optional[List[Player]] = None
 
     @classmethod
-    def from_data(cls, data: dict, name_column: str, players_column: Optional[str]) -> "Team":
-        players = None if players_column is None \
-            else [Player.from_data(player_data) for player_data in data[players_column]]
-        return Team(data[name_column], players)
+    def from_faction(cls, data: dict) -> "Team":
+        players = [Player.from_roster(it) for it in data["roster"]] if "roster" in data else None
+        return Team(data["name"], players)
 
 
 def _get_winner(data: dict, team_a: Team, team_b: Team):
-    return team_a if data["results"]["winner"] == "faction1" else team_b
-
-
-@dataclass
-class Game:
-    team_a: Team
-    team_b: Team
-    match_id: str
-    winner: Team
-    mode: str
-    date: datetime
-
-    @classmethod
-    def from_data(cls, data: dict) -> "Game":
-        teams_data = data["teams"]
-        team_a = Team.from_data(teams_data["faction1"], "nickname", "players")
-        team_b = Team.from_data(teams_data["faction2"], "nickname", "players")
-        winner = _get_winner(data, team_a, team_b)
-        date = datetime.fromtimestamp(data['started_at'])
-        return Game(
-            match_id=data["match_id"],
-            team_a=team_a,
-            team_b=team_b,
-            winner=winner,
-            mode=data["game_mode"],
-            date=date
-        )
-
-    def is_player_win(self, player: Player):
-        return any(player == it for it in self.winner.players)
-
-    def __hash__(self):
-        return hash(self.match_id)
-
-    def __eq__(self, other):
-        if not isinstance(other, Match):
-            return False
-        return self.match_id == other.match_id
+    return team_a if data["results"][0]["winner"] == "faction1" else team_b
 
 
 @dataclass
@@ -117,7 +82,6 @@ class Match:
     team_a: Team
     team_b: Team
     map: str
-    faceit_url: str
     demo_url: Optional[str]
     match_id: str
     winner: Team
@@ -127,24 +91,22 @@ class Match:
 
     @classmethod
     def from_data(cls, data: dict) -> "Match":
-        is_played = "demo_url" in data
+        is_played = "demoURLs" in data
         teams_data = data["teams"]
-        team_a = Team.from_data(teams_data["faction1"], "name", "roster" if is_played else None)
-        team_b = Team.from_data(teams_data["faction2"], "name", "roster" if is_played else None)
+        team_a = Team.from_faction(teams_data["faction1"])
+        team_b = Team.from_faction(teams_data["faction2"])
         winner = _get_winner(data, team_a, team_b)
-        date = datetime.fromtimestamp(data['started_at']) if is_played else None
+        date = datetime.strptime(data['startedAt'], "%Y-%m-%dT%H:%M:%SZ") if is_played else None
         return Match(
-            match_id=data["match_id"],
-            faceit_url=data["faceit_url"].replace("{lang}", "en"),
+            match_id=data["id"],
             team_a=team_a,
             team_b=team_b,
-            demo_url=data["demo_url"][0] if is_played else None,
+            demo_url=data["demoURLs"][0] if is_played else None,
             map=data["voting"]["map"]["pick"][0] if is_played else None,
             winner=winner,
-            calculate_elo=data["calculate_elo"],
+            calculate_elo=data["calculateElo"],
             date=date,
-            is_played=is_played
-        )
+            is_played=is_played)
 
     def __hash__(self):
         return hash(self.match_id)
@@ -155,29 +117,17 @@ class Match:
         return self.match_id == other.match_id
 
 
-_FACEIT_STATS_URL = "https://api.faceit.com/stats/v1"
-
-
-def _get_player_matches_stats(faceit: FaceitData, player_id: str, game: str, page: int = 0, size: int = 0):
-    api_url = f"{_FACEIT_STATS_URL}/stats/time/users/{player_id}/games/{game}?page={page}&size={size}"
-    headers = {'accept': 'application/json'}
-    res = requests.get(api_url, headers=headers)
-    return json.loads(res.content.decode('utf-8')) if res.status_code == 200 else None
-
-
 class Faceit(object):
 
     def __init__(self, apikey: str):
-        #
-        self.apikey = apikey
-        self.client = FaceitData(apikey)
+        self._api = FaceitApi()
 
-    def championship_matches(self, champ_id) -> Iterable[Match]:
-        data = self.client.championship_matches(champ_id)
-        return [Match.from_data(item) for item in data["items"]]
+    def championship_matches(self, championship_id) -> Iterable[Match]:
+        matches_data = self._api.championship_matches(championship_id)
+        return [Match.from_data(item) for item in matches_data]
 
     def match(self, match_id: str) -> Match:
-        data = self.client.match_details(match_id)
+        data = self._api.match_details(match_id)
         return Match.from_data(data)
 
     def download_demo(self, match: Union[Match, str], directory: Path, force: bool = False):
@@ -214,39 +164,26 @@ class Faceit(object):
     def player(self, nickname: str) -> Optional[Player]:
         log.info(f"Request player {nickname} details")
 
-        player_details = self.client.player_details(nickname)
-        if player_details is None:
+        try:
+            player_details = self._api.player_details_by_name(nickname)
+        except FaceitApiRequestError as error:
+            log.error(f"Can't get player for nickname '{nickname}' due to code={error.response.status_code}")
             return None
-        return Player.from_data(player_details)
+        else:
+            return Player.from_details(player_details)
 
-    def player_games_v1(self, player_id: str, count: Optional[int] = None) -> Iterable[Game]:
-        index = 0
-        position = 0
-        while True:
-            log.debug(f"Requesting player {player_id} matches from {position}")
-            matches = self.client.player_matches(player_id, "csgo", starting_item_position=position)
-            if matches is None or len(matches["items"]) == 0:
-                break
-            for item in matches["items"]:
-                index += 1
-                yield Game.from_data(item)
-                if count is not None and index >= count:
-                    return
-            time.sleep(0.1)
-            position += 20
+    def matches_stats(self, player: Union[Player, str], count: Optional[int] = None):
+        log.info(f"Request {player} statistics history")
 
-    def player_games_v2(self, player_id: str, count: Optional[int] = None):
-        log.info(f"Request player {player_id} statistics history")
+        player_id = player.player_id if isinstance(player, Player) else player
 
         index = 0
         page = 0
 
-        player = Player.from_data(self.client.player_id_details(player_id))
-
         while True:
-            log.debug(f"Requesting player {player_id}/{player.nickname} matches for page {page}")
-            matches = _get_player_matches_stats(self.client, player_id, "csgo", page)
-            if matches is None or len(matches) == 0:
+            log.debug(f"Requesting player {player} matches for page {page}")
+            matches = self._api.player_matches_stats(player_id, "csgo", page)
+            if not matches:
                 break
             for item in matches:
                 index += 1

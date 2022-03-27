@@ -4,6 +4,8 @@ import os.path
 import sys
 from typing import List
 
+from matplotlib import pyplot as plt
+
 from faceit.faceit import Faceit
 from faceit.functions import statistics2dataframe
 from faceit.visualization import draw_faceit_score_history
@@ -21,6 +23,7 @@ def main(argv: List[str]):
 
     log.info(args)
 
+    args.player = args.player.strip("\\")
     nickname = args.player
 
     if not os.path.isfile(args.config):
@@ -34,12 +37,12 @@ def main(argv: List[str]):
     faceit = Faceit(apikey)
 
     player = faceit.player(nickname)
-    statistics = faceit.player_games_v2(player.player_id)
+    statistics = faceit.matches_stats(player.player_id)
 
     df = statistics2dataframe(statistics)
-    fig, plot = draw_faceit_score_history(df, x="date")
+    draw_faceit_score_history(df)
 
-    fig.show()
+    plt.show()
 
 
 if __name__ == '__main__':
