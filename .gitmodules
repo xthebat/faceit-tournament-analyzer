@@ -1,3 +1,0 @@
-[submodule "faceit_api"]
-	path = faceit_api
-	url = https://github.com/LaughingLove/faceit_api.py
