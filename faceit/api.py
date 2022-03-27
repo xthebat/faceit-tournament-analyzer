@@ -1,10 +1,12 @@
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import requests
 from requests import Response
 
+from utils.logging import logger
 
 FACEIT_API_URL = "https://api.faceit.com"
 
@@ -15,17 +17,22 @@ MATCH_V2_ENDPOINT = "match/v2"
 _GET_REQUEST = "GET"
 
 
+log = logger()
+
+
 @dataclass
 class FaceitApiRequestError(Exception):
-    response: Response
+    error: Any
 
 
 class FaceitApi(object):
 
-    def __init__(self, base_url: str = FACEIT_API_URL):
+    def __init__(self, base_url: str = FACEIT_API_URL, retries: int = 10, delay: float = 5.0):
         self._base_url = base_url
+        self._retries = retries
+        self._delay = delay
 
-    def _request(self, request: str, endpoint: str, url: str):
+    def __request_internal(self, request: str, endpoint: str, url: str):
         headers = {'accept': 'application/json'}
         api = f"{self._base_url}/{endpoint}/{url}"
         response: Response = requests.request(request, url=api, headers=headers)
@@ -34,6 +41,16 @@ class FaceitApi(object):
         content = response.content.decode('utf-8')
         result = json.loads(content)
         return result["payload"] if "payload" in result else result
+
+    def _request(self, request: str, endpoint: str, url: str):
+        for retry in range(self._retries):
+            try:
+                return self.__request_internal(request, endpoint, url)
+            except (UnicodeDecodeError, TimeoutError) as error:
+                log.error(f"{error}")
+                if retry == self._retries - 1:
+                    raise FaceitApiRequestError(error)
+                time.sleep(5.0)
 
     def _get_request(self, endpoint: str, url: str):
         return self._request(_GET_REQUEST, endpoint, url)

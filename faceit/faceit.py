@@ -49,38 +49,71 @@ class Team:
         players = [Player.from_roster(it) for it in data["roster"]] if "roster" in data else None
         return Team(data["name"], players)
 
+    def has_player(self, player: Union[Player, str]):
+        player_id = player.player_id if isinstance(player, Player) else player
+        return any(it.player_id == player_id for it in self)
+
+    def __iter__(self):
+        return self.players.__iter__()
+
 
 def _get_winner(data: dict, team_a: Team, team_b: Team):
     return team_a if data["results"][0]["winner"] == "faction1" else team_b
 
 
 @dataclass
-class Statistic:
-    name: str
-    team: str
-    map_name: str
+class StatisticInfo:
     rounds: int
-    elo: Optional[int]
-    mode: str
     date: datetime
 
+    elo: Optional[int]
+    kills: int
+    assists: int
+    deaths: int
+    mvps: int
+    headshots: int
+
     @classmethod
-    def from_data(cls, data: dict) -> "Statistic":
-        return Statistic(
-            name=data["nickname"],
-            team=data["i5"],
-            map_name=data["i1"],
-            rounds=dict_get_or_default(data, "i12", None, convert=int),
-            elo=dict_get_or_default(data, "elo", None, convert=int),
-            mode=data["gameMode"],
-            date=dict_get_or_default(data, "date", None, convert=lambda it: datetime.fromtimestamp(it // 1000))
+    def from_data(cls, data: dict):
+        return StatisticInfo(
+            rounds=data["i12"],
+            date=datetime.fromtimestamp(data["date"] // 1000),
+            elo=dict_get_or_default(data, "elo", None, int),
+            kills=int(data["i6"]),
+            assists=int(data["i7"]),
+            deaths=int(data["i8"]),
+            mvps=int(data["i10"]),
+            headshots=int(data["i13"]),
         )
 
 
 @dataclass
+class Statistic:
+    match_id: str
+    nickname: str
+    team_name: str
+    map_name: str
+    mode: str
+    info: Optional[StatisticInfo]
+
+    @classmethod
+    def from_data(cls, data: dict) -> "Statistic":
+        return Statistic(
+            match_id=data["matchId"],
+            nickname=data["nickname"],
+            team_name=data["i5"],
+            map_name=data["i1"],
+            mode=data["gameMode"],
+            info=StatisticInfo.from_data(data)
+        )
+
+    def has_elo(self):
+        return self.info.elo is not None
+
+
+@dataclass
 class Match:
-    team_a: Team
-    team_b: Team
+    teams: List[Team]
     map: str
     demo_url: Optional[str]
     match_id: str
@@ -93,14 +126,13 @@ class Match:
     def from_data(cls, data: dict) -> "Match":
         is_played = "demoURLs" in data
         teams_data = data["teams"]
-        team_a = Team.from_faction(teams_data["faction1"])
-        team_b = Team.from_faction(teams_data["faction2"])
-        winner = _get_winner(data, team_a, team_b)
+        team1 = Team.from_faction(teams_data["faction1"])
+        team2 = Team.from_faction(teams_data["faction2"])
+        winner = _get_winner(data, team1, team2)
         date = datetime.strptime(data['startedAt'], "%Y-%m-%dT%H:%M:%SZ") if is_played else None
         return Match(
             match_id=data["id"],
-            team_a=team_a,
-            team_b=team_b,
+            teams=[team1, team2],
             demo_url=data["demoURLs"][0] if is_played else None,
             map=data["voting"]["map"]["pick"][0] if is_played else None,
             winner=winner,
@@ -115,6 +147,9 @@ class Match:
         if not isinstance(other, Match):
             return False
         return self.match_id == other.match_id
+
+    def get_players_team(self, player: Union[Player, str]):
+        return next(it for it in self.teams if it.has_player(player))
 
 
 class Faceit(object):
@@ -167,12 +202,12 @@ class Faceit(object):
         try:
             player_details = self._api.player_details_by_name(nickname)
         except FaceitApiRequestError as error:
-            log.error(f"Can't get player for nickname '{nickname}' due to code={error.response.status_code}")
+            log.error(f"Can't get player for nickname '{nickname}' due to {error}")
             return None
         else:
             return Player.from_details(player_details)
 
-    def matches_stats(self, player: Union[Player, str], count: Optional[int] = None):
+    def matches_stats(self, player: Union[Player, str], count: Optional[int] = None) -> Iterable[Statistic]:
         log.info(f"Request {player} statistics history")
 
         player_id = player.player_id if isinstance(player, Player) else player
