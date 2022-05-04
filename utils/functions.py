@@ -1,7 +1,9 @@
 import itertools
 import gzip
+import json
 import shutil
-from typing import Iterable, Generator, List, Callable, TypeVar, Optional
+from pathlib import Path
+from typing import Iterable, Generator, List, Callable, TypeVar, Optional, Union, Any
 
 
 def gzip_unpack(input_file: str, output_file: str):
@@ -66,3 +68,16 @@ def first(predicate: Callable[[T], bool], iterable: Iterable[T]) -> T:
 def find(predicate: Callable[[T], bool], iterable: Iterable) -> Optional[T]:
     return next(filter(predicate, iterable), None)
 
+
+def slice2range(s: slice, length=2 ** 32) -> range:
+    return range(*s.indices(length))
+
+
+def read_json(path: Union[Path, str]):
+    with open(str(Path(path).absolute()), "rt") as file:
+        return json.loads(file.read())
+
+
+def write_json(path: Union[Path, str], obj: Any):
+    with open(str(Path(path).absolute()), "wt") as file:
+        file.write(json.dumps(obj))

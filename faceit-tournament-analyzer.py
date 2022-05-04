@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from demo.base import Demo, Statistics
+from demo.base import Demo, Statistics, Frames
 from faceit.faceit import Faceit
 from utils.logging import logger
 
@@ -18,15 +18,16 @@ def analyze_championship(faceit: Faceit, championship: str, demos_dir: Path, arg
 
     played_matches = list(filter(lambda it: it.demo_url is not None, matches))
 
-    stats: Optional[Statistics] = None
+    full_stats: Optional[Statistics] = None
     for match in played_matches:
         dem_path = faceit.download_demo(match, demos_dir, args.force_download)
-        demo = Demo.analyze(dem_path, args.force_analyze)
+        demo = Demo.load(dem_path, args.force_analyze)
+        stats = Statistics.from_demo(demo)
         if args.match_stats:
-            print(demo.stats.player_box_score().to_string())
-        stats = stats.concat(demo.stats) if stats is not None else demo.stats
+            print(stats.player_box_score().to_string())
+        full_stats = full_stats.concat(stats) if full_stats is not None else stats
 
-    print(stats.player_box_score().to_string())
+    print(full_stats.player_box_score().to_string())
 
 
 def main(argv: List[str]):
@@ -58,11 +59,5 @@ def main(argv: List[str]):
         analyze_championship(faceit, championship, demos_dir, args)
 
 
-def demo_test():
-    demo = Demo.analyze("demos/1-bc6f4da7-e96b-4070-9a66-6392718d3ba6-1-1.dem")
-    print(demo.stats.player_box_score().to_string())
-
-
 if __name__ == '__main__':
-    # demo_test()
     main(sys.argv)

@@ -7,7 +7,7 @@ from typing import Optional, Iterable, Union, List, Dict
 from urllib.request import Request, urlopen
 
 from faceit.api import FaceitApi, FaceitApiRequestError
-from utils.functions import dict_get_or_default
+from utils.functions import dict_get_or_default, read_json, write_json
 from utils.logging import logger
 
 log = logger()
@@ -28,7 +28,7 @@ class Player:
 
     @classmethod
     def from_roster(cls, data: dict) -> "Player":
-        return Player(data["id"], data["nickname"], data["gameSkillLevel"], data["elo"])
+        return Player(data["id"], data["nickname"], data.get("gameSkillLevel", None), data.get("elo", None))
 
     def __hash__(self):
         return hash(self.player_id)
@@ -156,13 +156,20 @@ class Faceit(object):
 
     def __init__(self):
         self._api = FaceitApi()
+        self._cache_path = Path("_faceit_cache_")
+        self._cache_path.mkdir(exist_ok=True)
 
     def championship_matches(self, championship_id) -> Iterable[Match]:
         matches_data = self._api.championship_matches(championship_id)
         return [Match.from_data(item) for item in matches_data]
 
-    def match(self, match_id: str) -> Match:
-        data = self._api.match_details(match_id)
+    def match(self, match_id: str, force: bool = False) -> Match:
+        match_cache_path = self._cache_path / Path(match_id).with_suffix(".json")
+        if not force and match_cache_path.is_file():
+            data = read_json(match_cache_path)
+        else:
+            data = self._api.match_details(match_id)
+            write_json(match_cache_path, data)
         return Match.from_data(data)
 
     def download_demo(self, match: Union[Match, str], directory: Path, force: bool = False):
